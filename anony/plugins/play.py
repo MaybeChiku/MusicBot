@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
+from pathlib import Path
 from pyrogram import filters, types
 
 from anony import anon, app, config, db, lang, queue, tg, yt
@@ -36,6 +36,7 @@ async def play_hndlr(
     mention = m.from_user.mention
     media = tg.get_media(m.reply_to_message) if m.reply_to_message else None
     tracks = []
+    file = None
 
     if url:
         if "playlist" in url:
@@ -69,6 +70,9 @@ async def play_hndlr(
     elif media:
         setattr(sent, "lang", m.lang)
         file = await tg.download(m.reply_to_message, sent)
+
+    if not file:
+        return await sent.edit_text(m.lang["play_usage"])
 
     if file.duration_sec > config.DURATION_LIMIT:
         return await sent.edit_text(
@@ -106,7 +110,12 @@ async def play_hndlr(
             return
 
     if not file.file_path:
-        file.file_path = await yt.download(file.id, video=video)
+        fname = f"downloads/{file.id}.{'mp4' if video else 'webm'}"
+        if Path(fname).exists():
+            file.file_path = fname
+        else:
+            await sent.edit_text(m.lang["play_downloading"])
+            file.file_path = await yt.download(file.id, video=video)
 
     await anon.play_media(chat_id=m.chat.id, message=sent, media=file)
     if not tracks:
